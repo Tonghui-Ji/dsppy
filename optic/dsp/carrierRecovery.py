@@ -139,7 +139,7 @@ def cpr(Ei, param=None, symbTx=None):
     return (Eo, θ) if returnPhases else Eo
 
 
-@njit
+# @njit
 def bps(Ei, N, constSymb, B):
     """
     Blind phase search (BPS) algorithm

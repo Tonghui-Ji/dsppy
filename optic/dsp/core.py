@@ -107,7 +107,7 @@ def firFilter(h, x):
     return y
 
 
-@njit
+# @njit
 def rrcFilterTaps(t, alpha, Ts):
     """
     Generate Root-Raised Cosine (RRC) filter coefficients.
@@ -595,7 +595,7 @@ def finddelay(x, y):
     return np.argmax(np.abs(signal.correlate(x, y))) - x.shape[0] + 1
 
 
-@njit
+# @njit
 def pnorm(x):
     """
     Normalize the average power of each componennt of x.
@@ -614,7 +614,7 @@ def pnorm(x):
     return x / np.sqrt(np.mean(x * np.conj(x)).real)
 
 
-@njit
+# @njit
 def gaussianComplexNoise(shapeOut, σ2=1.0):
     """
     Generate complex circular Gaussian noise.
@@ -656,7 +656,7 @@ def gaussianNoise(shapeOut, σ2=1.0):
     return np.random.normal(0, np.sqrt(σ2), shapeOut)
 
 
-@njit
+# @njit
 def phaseNoise(lw, Nsamples, Ts):
     """
     Generate realization of a random-walk phase-noise process.

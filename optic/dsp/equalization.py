@@ -190,9 +190,8 @@ def mimoAdaptEqualizer(x, param=None, dx=None):
     totalNumSymb = int(np.fix((len(x) - nTaps) / SpS + 1))
 
     if not L:  # if L is not defined
-        L = [
-            totalNumSymb
-        ]  # Length of the output (1 sample/symbol) of the training section
+        L = totalNumSymb
+          # Length of the output (1 sample/symbol) of the training section
     if not H:  # if H is not defined
         H = np.zeros((nModes**2, nTaps), dtype="complex")
 
@@ -258,12 +257,16 @@ def mimoAdaptEqualizer(x, param=None, dx=None):
                 logg.info(f"{runAlg} MSE = %.6f.", np.nanmean(errSq[:, nStart:nEnd]))
             nStart = nEnd
     else:
+
         for indIter in tqdm(range(numIter), disable=not (prgsBar)):
             logg.info(f"{alg}training iteration #%d", indIter)
-            yEq, H, errSq, Hiter = coreAdaptEq(
-                x, dx, SpS, H, L, mu, nTaps, storeCoeff, alg, constSymb
+            yEq, H,H_, errSq, Hiter = coreAdaptEq(
+                x, dx, SpS, H, H_, L, mu,lambdaRLS, nTaps, storeCoeff,runWL, alg, constSymb
             )
             logg.info(f"{alg}MSE = %.6f.", np.nanmean(errSq))
+            print(f"{alg}MSE = %.6f.", np.nanmean(errSq))
+
+
 
     if returnResults:
         if runWL:
@@ -274,7 +277,7 @@ def mimoAdaptEqualizer(x, param=None, dx=None):
         return yEq
 
 
-@njit
+# @njit
 def coreAdaptEq(x, dx, SpS, H, H_, L, mu, lambdaRLS, nTaps, storeCoeff, runWL, alg, constSymb):
     """
     Adaptive equalizer core processing function
@@ -715,7 +718,7 @@ def cmaUp(x, R, outEq, mu, H, H_, nModes, runWL):
     return H, H_, np.abs(err) ** 2
 
 
-@njit
+# @njit
 def rdeUp(x, R, outEq, mu, H, H_, nModes, runWL):
     """
     Coefficient update with the RDE algorithm.

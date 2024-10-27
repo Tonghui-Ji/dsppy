@@ -253,7 +253,7 @@ def apskConst(M, m1=None, phaseOffset=None):
     return const * np.exp(1j * phaseOffset)
 
 
-@njit(parallel=True)
+# @njit(parallel=True)
 def minEuclid(symb, const):
     """
     Find minimum Euclidean distance.
@@ -284,7 +284,7 @@ def minEuclid(symb, const):
     return ind
 
 
-@njit(parallel=True)
+# @njit(parallel=True)
 def demap(indSymb, bitMap):
     """
     Contellation symbol index to bit sequence demapping.
