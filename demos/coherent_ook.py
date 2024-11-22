@@ -24,7 +24,7 @@ logg.basicConfig(level=logg.WARN, format='%(message)s', force=True)
 from copy import deepcopy
 from tqdm.notebook import tqdm
 
-def multipath_channel(tx_wmf, num_paths, sample_rate, phase_noise_std=np.pi/4):
+def multipath_channel(tx_wmf, num_paths, sample_rate, phase_noise_std=np.pi/4,max_delay=10e-12):
     """
     模拟多径传输信道，并为每个路径添加独立的相位噪声。
 
@@ -47,7 +47,7 @@ def multipath_channel(tx_wmf, num_paths, sample_rate, phase_noise_std=np.pi/4):
 
     for i in range(num_paths):
         # 每个路径独立的延迟和增益
-        delay = 1e-12 * np.random.uniform(0, 30, size=1)  # 随机延迟
+        delay = 1e-12 * np.random.uniform(0, max_delay*1e12, size=1)  # 随机延迟
         gain = np.random.rand(1)  # 随机增益
 
         # 每个路径独立的相位噪声
@@ -97,9 +97,9 @@ def multipath_channel(tx_wmf, num_paths, sample_rate, phase_noise_std=np.pi/4):
 paramTx = parameters()
 paramTx.constType = 'ook'
 paramTx.M   = 2           # order of the modulation format
-paramTx.Rs  = 32e9         # symbol rate [baud]
+paramTx.Rs  = 10e9         # symbol rate [baud]
 paramTx.SpS = 16           # samples per symbol
-paramTx.pulse = 'rrc'      # pulse shaping filter
+paramTx.pulse = 'rect'      # pulse shaping filter
 paramTx.Ntaps = 2*4096     # number of pulse shaping filter coefficients
 paramTx.alphaRRC = 0.01    # RRC rolloff
 paramTx.Pch_dBm = 0        # power per WDM channel [dBm]
@@ -153,7 +153,7 @@ paramPD.ideal = True
 
 ### WDM channels coherent detection and demodulation
 sigWDM = sigWDM_Tx[:,0]
-sigWDM = multipath_channel(sigWDM, 10, Fs, phase_noise_std=np.pi/20)
+sigWDM = multipath_channel(sigWDM, 20, Fs, phase_noise_std=np.pi/20,max_delay=1/paramTx.Rs)
 ### Receiver
 
 # parameters
@@ -182,9 +182,12 @@ if paramTx.pulse == 'nrz':
     pulse = pulseShape('nrz', paramTx.SpS)
 elif paramTx.pulse == 'rrc':
     pulse = pulseShape('rrc', paramTx.SpS, N=paramTx.Ntaps, alpha=paramTx.alphaRRC, Ts=1/paramTx.Rs)
+elif paramTx.pulse == 'rect':
+    pulse = pulseShape('rect', paramTx.SpS)
 
 pulse = pnorm(pulse)
 sigRx = firFilter(pulse, sigRx_coh)  
+sigRx = sigRx_coh
 
 ### Downsampling to 2 samples/symbol and re-synchronization with transmitted sequences
 

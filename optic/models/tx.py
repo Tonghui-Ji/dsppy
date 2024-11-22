@@ -136,6 +136,8 @@ def simpleWDMTx(param):
         pulse = pulseShape("nrz", param.SpS)
     elif param.pulse == "rrc":
         pulse = pulseShape("rrc", param.SpS, N=param.Ntaps, alpha=param.alphaRRC, Ts=Ts)
+    elif param.pulse == 'rect':
+        pulse = pulseShape('rect', param.SpS)
 
     pulse = pulse / np.max(np.abs(pulse))
 

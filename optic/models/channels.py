@@ -580,3 +580,232 @@ def awgn(sig, snr, Fs=1, B=1, complexNoise=True):
         noise = gaussianNoise(sig.shape, σ2)
 
     return sig + noise
+
+
+def manakovDBP(Ei, param):
+    """
+    Run the Manakov SSF digital backpropagation (symmetric, dual-pol.).
+
+    Parameters
+    ----------
+    Ei : np.array
+        Input optical signal field.
+    param : parameter object  (struct)
+        Object with physical/simulation parameters of the optical channel.
+
+        - param.Ltotal: total fiber length [km][default: 400 km]
+
+        - param.Lspan: span length [km][default: 80 km]
+
+        - param.hz: step-size for the split-step Fourier method [km][default: 0.5 km]
+
+        - param.alpha: fiber attenuation parameter [dB/km][default: 0.2 dB/km]
+
+        - param.D: chromatic dispersion parameter [ps/nm/km][default: 16 ps/nm/km]
+
+        - param.gamma: fiber nonlinear parameter [1/W/km][default: 1.3 1/W/km]
+
+        - param.Fc: carrier frequency [Hz] [default: 193.1e12 Hz]
+
+        - param.Fs: simulation sampling frequency [samples/second][default: None]
+
+        - param.prec: numerical precision [default: np.complex128]
+
+        - param.amp: 'edfa', 'ideal', or 'None. [default:'edfa']
+
+        - param.maxIter: max number of iter. in the trap. integration [default: 10]
+
+        - param.tol: convergence tol. of the trap. integration.[default: 1e-5]
+
+        - param.nlprMethod: adap step-size based on nonl. phase rot. [default: True]
+
+        - param.maxNlinPhaseRot: max nonl. phase rot. tolerance [rad][default: 2e-2]
+
+        - param.prgsBar: display progress bar? bolean variable [default:True]
+
+        - param.saveSpanN: specify the span indexes to be outputted [default:[]]
+
+        - param.returnParameters: bool, return channel parameters [default: False]
+
+
+    Returns
+    -------
+    Ech : np.array
+        Optical signal after nonlinear backward propagation.
+    param : parameter object  (struct)
+        Object with physical/simulation parameters used in the split-step alg.
+    
+    References
+    ----------
+    [1] E. Ip e J. M. Kahn, “Compensation of dispersion and nonlinear impairments using digital backpropagation”, Journal of Lightwave Technology, vol. 26, nº 20, p. 3416–3425, 2008, doi: 10.1109/JLT.2008.927791.
+
+    [2] E. Ip, “Nonlinear compensation using backpropagation for polarization-multiplexed transmission”, Journal of Lightwave Technology, vol. 28, nº 6, p. 939–951, mar. 2010, doi: 10.1109/JLT.2010.2040135.
+
+    """
+    import logging
+    try:
+        Fs = param.Fs
+    except AttributeError:
+        logging.error("Simulation sampling frequency (Fs) not provided.")
+
+    # check input parameters
+    param.Ltotal = getattr(param, "Ltotal", 400)
+    param.Lspan = getattr(param, "Lspan", 80)
+    param.hz = getattr(param, "hz", 0.5)
+    param.alpha = getattr(param, "alpha", 0.2)
+    param.D = getattr(param, "D", 16)
+    param.gamma = getattr(param, "gamma", 1.3)
+    param.Fc = getattr(param, "Fc", 193.1e12)
+    param.prec = getattr(param, "prec", np.complex128)
+    param.amp = getattr(param, "amp", "edfa")
+    param.maxIter = getattr(param, "maxIter", 10)
+    param.tol = getattr(param, "tol", 1e-5)
+    param.nlprMethod = getattr(param, "nlprMethod", True)
+    param.maxNlinPhaseRot = getattr(param, "maxNlinPhaseRot", 2e-2)
+    param.prgsBar = getattr(param, "prgsBar", True)
+    param.saveSpanN = getattr(param, "saveSpanN", [param.Ltotal // param.Lspan])
+    param.returnParameters = getattr(param, "returnParameters", False)
+
+    Ltotal = param.Ltotal
+    Lspan = param.Lspan
+    hz = param.hz
+    alpha = param.alpha
+    D = param.D
+    gamma = param.gamma
+    amp = param.amp
+    Fc = param.Fc
+    prec = param.prec
+    maxIter = param.maxIter
+    tol = param.tol
+    prgsBar = param.prgsBar
+    saveSpanN = param.saveSpanN
+    nlprMethod = param.nlprMethod
+    maxNlinPhaseRot = param.maxNlinPhaseRot
+    returnParameters = param.returnParameters
+
+    Nspans = int(np.floor(Ltotal / Lspan))
+
+    # channel parameters
+    c_kms = const.c / 1e3  # speed of light (vacuum) in km/s
+    λ = c_kms / Fc
+    α = alpha / (10 * np.log10(np.exp(1)))
+    β2 = -(D * λ**2) / (2 * np.pi * c_kms)
+    γ = gamma
+
+    c_kms = np.asarray(c_kms, dtype=prec)  # speed of light (vacuum) in km/s
+    λ = np.asarray(λ, dtype=prec)
+    α = np.asarray(α, dtype=prec)
+    β2 = np.asarray(β2, dtype=prec)
+    γ = np.asarray(γ, dtype=prec)
+    hz = np.asarray(hz, dtype=prec)
+    Ltotal = np.asarray(Ltotal, dtype=prec)
+    maxNlinPhaseRot = np.asarray(maxNlinPhaseRot, dtype=prec)
+
+    # generate frequency axis
+    Nfft = len(Ei)
+    ω = 2 * np.pi * Fs * fftfreq(Nfft).astype(prec)
+
+    Ei_ = np.asarray(Ei).astype(prec)
+
+    Ech_x = Ei_[:, 0::2].T
+    Ech_y = Ei_[:, 1::2].T
+
+    # define static part of the linear operator
+    argLimOp = np.array((α / 2) - 1j * (β2 / 2) * (ω**2)).astype(prec)
+
+    if Ech_x.shape[0] > 1:
+        argLimOp = np.tile(argLimOp, (Ech_x.shape[0], 1))
+    else:
+        argLimOp = argLimOp.reshape(1, -1)
+
+    if saveSpanN:
+        Ech_spans = np.zeros((Ei_.shape[0], Ei_.shape[1] * len(saveSpanN))).astype(prec)
+        indRecSpan = 0
+
+    for spanN in tqdm(range(1, Nspans + 1), disable=not (prgsBar)):
+        # reverse amplification step
+        if amp in {"edfa", "ideal"}:
+            Ech_x = Ech_x * np.exp(-α / 2 * Lspan)
+            Ech_y = Ech_y * np.exp(-α / 2 * Lspan)
+        elif amp is None:
+            Ech_x = Ech_x * np.exp(0)
+            Ech_y = Ech_y * np.exp(0)
+
+        Ex_conv = Ech_x.copy()
+        Ey_conv = Ech_y.copy()
+        z_current = 0
+
+        # reverse fiber propagation steps
+        while z_current < Lspan:
+            Pch = Ech_x * np.conj(Ech_x) + Ech_y * np.conj(Ech_y)
+
+            phiRot = nlinPhaseRot(Ex_conv, Ey_conv, Pch, γ)
+
+            if nlprMethod:
+                hz_ = (
+                    maxNlinPhaseRot / np.max(phiRot)
+                    if Lspan - z_current >= maxNlinPhaseRot / np.max(phiRot)
+                    else Lspan - z_current
+                )
+            elif Lspan - z_current < hz:
+                hz_ = Lspan - z_current  # check that the remaining
+                # distance is not less than hz (due to non-integer
+                # steps/span)
+            else:
+                hz_ = hz
+
+            # define the linear operator
+            linOperator = np.exp(argLimOp * (hz_ / 2))
+
+            # First linear step (frequency domain)
+            Ex_hd = ifft(fft(Ech_x) * linOperator)
+            Ey_hd = ifft(fft(Ech_y) * linOperator)
+
+            # Pch = Ex_hd * np.conj(Ex_hd) + Ey_hd * np.conj(Ey_hd)
+            # phiRot = nlinPhaseRot(Ex_hd, Ey_hd, Pch, γ)
+
+            # Nonlinear step (time domain)
+            for nIter in range(maxIter):
+                rotOperator = np.exp(-1j * phiRot * hz_)
+                # rotOperator = 1  ## 模拟纯线性补偿
+
+                Ech_x_fd = Ex_hd * rotOperator
+                Ech_y_fd = Ey_hd * rotOperator
+
+                # Second linear step (frequency domain)
+                Ech_x_fd = ifft(fft(Ech_x_fd) * linOperator)
+                Ech_y_fd = ifft(fft(Ech_y_fd) * linOperator)
+
+                # check convergence o trapezoidal integration in phiRot
+                lim = convergenceCondition(Ech_x_fd, Ech_y_fd, Ex_conv, Ey_conv)
+
+                Ex_conv = Ech_x_fd.copy()
+                Ey_conv = Ech_y_fd.copy()
+
+                if lim < tol:
+                    break
+                elif nIter == maxIter - 1:
+                    logging.warning(
+                        f"Warning: target SSFM error tolerance was not achieved in {maxIter} iterations"
+                    )
+
+                phiRot = nlinPhaseRot(Ex_conv, Ey_conv, Pch, γ)
+
+            Ech_x = Ech_x_fd.copy()
+            Ech_y = Ech_y_fd.copy()
+
+            z_current += hz_  # update propagated distance
+
+        if spanN in saveSpanN:
+            Ech_spans[:, 2 * indRecSpan : 2 * indRecSpan + 1] = Ech_x.T
+            Ech_spans[:, 2 * indRecSpan + 1 : 2 * indRecSpan + 2] = Ech_y.T
+            indRecSpan += 1
+
+    if saveSpanN:
+        Ech = Ech_spans
+    else:
+        Ech = Ei.copy()
+        Ech[:, 0::2] = Ech_x.T
+        Ech[:, 1::2] = Ech_y.T
+
+    return (Ech, param) if returnParameters else Ech
