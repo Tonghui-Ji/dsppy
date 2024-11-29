@@ -30,7 +30,7 @@ figsize(10, 3)
 # Transmitter parameters:
 paramTx = parameters()
 paramTx.M   = 16           # order of the modulation format
-paramTx.Rs  = 32e9         # symbol rate [baud]
+paramTx.Rs  = 92e9         # symbol rate [baud]
 paramTx.SpS = 16           # samples per symbol
 paramTx.pulse = 'rrc'      # pulse shaping filter
 paramTx.Ntaps = 4096     # number of pulse shaping filter coefficients
@@ -39,7 +39,7 @@ paramTx.Pch_dBm = 0        # power per WDM channel [dBm]
 paramTx.Nch     = 1       # number of WDM channels
 paramTx.Fc      = 193.1e12 # central optical frequency of the WDM spectrum
 paramTx.lw      = 0e3    # laser linewidth in Hz
-paramTx.freqSpac = 37.5e9  # WDM grid spacing
+paramTx.freqSpac = 100e9  # WDM grid spacing
 paramTx.Nmodes = 2         # number of signal modes [2 for polarization multiplexed signals]
 paramTx.Nbits = int(np.log2(paramTx.M)*1e5) # total number of bits per polarization
 
@@ -89,7 +89,7 @@ paramPD.B = paramTx.Rs
 paramPD.Fs = Fs    
 paramPD.ideal = True
 
-scale = np.arange(-2,0,2)
+scale = np.arange(0,4,2)
 Powers = paramTx.Pch_dBm + scale
 
 

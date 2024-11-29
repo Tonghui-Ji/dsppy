@@ -35,12 +35,12 @@ def tx_dsp(Pch_dBm=0,num_span=10):
     paramTx.SpS = 16           # samples per symbol
     paramTx.pulse = 'rrc'      # pulse shaping filter
     paramTx.Ntaps = 4096     # number of pulse shaping filter coefficients
-    paramTx.alphaRRC = 0.01    # RRC rolloff
+    paramTx.alphaRRC = 0.1    # RRC rolloff
     paramTx.Pch_dBm = Pch_dBm       # power per WDM channel [dBm]
     paramTx.Nch     = 1       # number of WDM channels
     paramTx.Fc      = 193.1e12 # central optical frequency of the WDM spectrum
     paramTx.lw      = 0e3    # laser linewidth in Hz
-    paramTx.freqSpac = 37.5e9  # WDM grid spacing
+    paramTx.freqSpac = 100e9  # WDM grid spacing
     paramTx.Nmodes = 2         # number of signal modes [2 for polarization multiplexed signals]
     paramTx.Nbits = int(np.log2(paramTx.M)*1e5) # total number of bits per polarization
 
@@ -56,7 +56,7 @@ def tx_dsp(Pch_dBm=0,num_span=10):
     paramCh.gamma = 1.3      # fiber nonlinear parameter [1/(W.km)]
     paramCh.Fc = paramTx.Fc  # central optical frequency of the WDM spectrum
     paramCh.hz = 0.5         # step-size of the split-step Fourier method [km]
-    paramCh.maxIter = 5      # maximum number of convergence iterations per step
+    paramCh.maxIter = 10      # maximum number of convergence iterations per step
     paramCh.tol = 1e-5       # error tolerance per step
     paramCh.nlprMethod = True # use adaptive step-size based o maximum nonlinear phase-shift?
     paramCh.maxNlinPhaseRot = 2e-2 # maximum nonlinear phase-shift per step
@@ -163,12 +163,12 @@ def rx_dsp(symbTx, sigWDM, paramTx, paramCh, runDBP):
     return np.mean(SNR)
 
 if __name__ == '__main__':
-    launch_power = np.arange(-4,4,2)
+    launch_power = np.arange(0,4,2)
     num_span = 10
     for launch_power in launch_power:
         symbTx, sigWDM, paramTx, paramCh = tx_dsp(launch_power,num_span)
-        snr_wo_nlc = rx_dsp(symbTx, sigWDM, paramTx, paramCh, True)
-        snr_w_dbp = rx_dsp(symbTx, sigWDM, paramTx, paramCh, False)
+        snr_wo_nlc = rx_dsp(symbTx, sigWDM, paramTx, paramCh, False)
+        snr_w_dbp = rx_dsp(symbTx, sigWDM, paramTx, paramCh, True)
 
         print('snr wo nlc:'+ str(snr_wo_nlc))
         print('snr w dbp:'+str(snr_w_dbp))
